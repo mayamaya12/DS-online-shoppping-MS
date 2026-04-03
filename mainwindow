@@ -1,0 +1,320 @@
+#include "mainwindow.h"
+
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
+    setupUI();
+    applyStyles();
+    updateDisplay("Welcome to Spare Parts Management System\n\nSelect an option from the menu to get started.");
+}
+
+MainWindow::~MainWindow() {}
+
+void MainWindow::setupUI() {
+    centralWidget = new QWidget(this);
+    setCentralWidget(centralWidget);
+
+    QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
+    mainLayout->setSpacing(20);
+    mainLayout->setContentsMargins(30, 30, 30, 30);
+
+    QVBoxLayout *buttonLayout = new QVBoxLayout();
+    buttonLayout->setSpacing(12);
+
+    btnAddPart = createStyledButton("Add Spare Part", "#DFB6B2", "#190019");
+    btnAddSupplier = createStyledButton("Add Supplier", "#DFB6B2", "#190019");
+    btnSearchPart = createStyledButton("Search Spare Part", "#854F6C", "#FBE4D8");
+    btnSearchSupplier = createStyledButton("Search Supplier", "#854F6C", "#FBE4D8");
+    btnModify = createStyledButton("Modify Record", "#522B5B", "#FBE4D8");
+    btnDisplayParts = createStyledButton("Display All Parts", "#2B124C", "#FBE4D8");
+    btnDisplaySuppliers = createStyledButton("Display All Suppliers", "#2B124C", "#FBE4D8");
+    btnHistory = createStyledButton("Interaction History", "#522B5B", "#FBE4D8");
+    btnQueue = createStyledButton("Pending Updates", "#522B5B", "#FBE4D8");
+    btnLink = createStyledButton("Link Supplier to Part", "#DFB6B2", "#190019");
+
+    buttonLayout->addWidget(btnAddPart);
+    buttonLayout->addWidget(btnAddSupplier);
+    buttonLayout->addWidget(btnSearchPart);
+    buttonLayout->addWidget(btnSearchSupplier);
+    buttonLayout->addWidget(btnModify);
+    buttonLayout->addWidget(btnDisplayParts);
+    buttonLayout->addWidget(btnDisplaySuppliers);
+    buttonLayout->addWidget(btnHistory);
+    buttonLayout->addWidget(btnQueue);
+    buttonLayout->addWidget(btnLink);
+    buttonLayout->addStretch();
+
+    QVBoxLayout *displayLayout = new QVBoxLayout();
+    QLabel *titleLabel = new QLabel("Display Panel");
+    titleLabel->setStyleSheet("color: #FBE4D8; font-size: 24px; font-weight: bold;");
+
+    displayText = new QTextEdit();
+    displayText->setReadOnly(true);
+    displayText->setMinimumHeight(600);
+
+    displayLayout->addWidget(titleLabel);
+    displayLayout->addWidget(displayText);
+
+    mainLayout->addLayout(buttonLayout, 1);
+    mainLayout->addLayout(displayLayout, 2);
+
+    connect(btnAddPart, &QPushButton::clicked, this, &MainWindow::onAddSparePart);
+    connect(btnAddSupplier, &QPushButton::clicked, this, &MainWindow::onAddSupplier);
+    connect(btnSearchPart, &QPushButton::clicked, this, &MainWindow::onSearchSparePart);
+    connect(btnSearchSupplier, &QPushButton::clicked, this, &MainWindow::onSearchSupplier);
+    connect(btnModify, &QPushButton::clicked, this, &MainWindow::onModifyRecord);
+    connect(btnDisplayParts, &QPushButton::clicked, this, &MainWindow::onDisplayAllParts);
+    connect(btnDisplaySuppliers, &QPushButton::clicked, this, &MainWindow::onDisplayAllSuppliers);
+    connect(btnHistory, &QPushButton::clicked, this, &MainWindow::onShowHistory);
+    connect(btnQueue, &QPushButton::clicked, this, &MainWindow::onShowQueue);
+    connect(btnLink, &QPushButton::clicked, this, &MainWindow::onLinkSupplierToPart);
+
+    setWindowTitle("Spare Parts Management System");
+    resize(1200, 800);
+}
+
+void MainWindow::applyStyles() {
+    centralWidget->setStyleSheet(
+        "QWidget { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+        "stop:0 #2B124C, stop:0.5 #522B5B, stop:1 #854F6C); }"
+        );
+
+    displayText->setStyleSheet(
+        "QTextEdit { background-color: rgba(25, 0, 25, 150); color: #FBE4D8; "
+        "border: 2px solid rgba(133, 79, 108, 100); border-radius: 15px; "
+        "padding: 20px; font-family: 'Courier New', monospace; font-size: 14px; }"
+        );
+}
+
+QPushButton* MainWindow::createStyledButton(const QString &text, const QString &bgColor, const QString &textColor) {
+    QPushButton *btn = new QPushButton(text);
+    btn->setMinimumHeight(50);
+    btn->setStyleSheet(QString(
+                           "QPushButton { background-color: %1; color: %2; border: none; "
+                           "border-radius: 15px; padding: 12px 20px; font-size: 14px; font-weight: bold; } "
+                           "QPushButton:hover { background-color: %1; opacity: 0.8; }"
+                           ).arg(bgColor).arg(textColor));
+    return btn;
+}
+
+void MainWindow::updateDisplay(const QString &text) {
+    displayText->setText(text);
+}
+
+void MainWindow::onAddSparePart() {
+    if (partTree.size() >= 100) {
+        QMessageBox::warning(this, "Limit Reached", "Cannot add more than 100 spare parts.");
+        return;
+    }
+
+    bool ok;
+    int partNum = QInputDialog::getInt(this, "Add Spare Part", "Enter Part Number:", 0, 0, 99999, 1, &ok);
+    if (!ok) return;
+
+    if (partTree.search(partNum)) {
+        QMessageBox::warning(this, "Duplicate", "Part number already exists!");
+        return;
+    }
+
+    QString name = QInputDialog::getText(this, "Add Spare Part", "Enter Part Name:", QLineEdit::Normal, "", &ok);
+    if (!ok || name.isEmpty()) return;
+
+    double cost = QInputDialog::getDouble(this, "Add Spare Part", "Enter Cost:", 0.0, 0.0, 999999.0, 2, &ok);
+    if (!ok) return;
+
+    int qty = QInputDialog::getInt(this, "Add Spare Part", "Enter Quantity:", 0, 0, 99999, 1, &ok);
+    if (!ok) return;
+
+    SparePart part;
+    part.setPartNumber(partNum);
+    part.setPartName(name.toStdString());
+    part.setCost(cost);
+    part.setExistingParts(qty);
+
+    if (partTree.insert(part)) {
+        string msg = "Added Spare Part #" + to_string(partNum);
+        historyStack.push(msg);
+        processQueue.enqueue("Processing: " + msg);
+        updateDisplay(QString("✓ Spare Part Added Successfully!\n\nPart Number: %1\nName: %2\nCost: $%3\nQuantity: %4")
+                          .arg(partNum).arg(name).arg(cost, 0, 'f', 2).arg(qty));
+    }
+}
+
+void MainWindow::onAddSupplier() {
+    if (supplierTree.size() >= 20) {
+        QMessageBox::warning(this, "Limit Reached", "Cannot add more than 20 suppliers.");
+        return;
+    }
+
+    bool ok;
+    int code = QInputDialog::getInt(this, "Add Supplier", "Enter Supplier Code:", 0, 0, 99999, 1, &ok);
+    if (!ok) return;
+
+    if (supplierTree.search(code)) {
+        QMessageBox::warning(this, "Duplicate", "Supplier code already exists!");
+        return;
+    }
+
+    QString name = QInputDialog::getText(this, "Add Supplier", "Enter Supplier Name:", QLineEdit::Normal, "", &ok);
+    if (!ok || name.isEmpty()) return;
+
+    QString phone = QInputDialog::getText(this, "Add Supplier", "Enter Telephone:", QLineEdit::Normal, "", &ok);
+    if (!ok) return;
+
+    QString email = QInputDialog::getText(this, "Add Supplier", "Enter Email:", QLineEdit::Normal, "", &ok);
+    if (!ok) return;
+
+    QString addr = QInputDialog::getText(this, "Add Supplier", "Enter Address:", QLineEdit::Normal, "", &ok);
+    if (!ok) return;
+
+    Supplier sup;
+    sup.setSupplierCode(code);
+    sup.setSupplierName(name.toStdString());
+    sup.setTelephone(phone.toStdString());
+    sup.setEmail(email.toStdString());
+    sup.setAddress(addr.toStdString());
+
+    if (supplierTree.insert(sup)) {
+        string msg = "Added Supplier #" + to_string(code);
+        historyStack.push(msg);
+        processQueue.enqueue("Processing: " + msg);
+        updateDisplay(QString("✓ Supplier Added Successfully!\n\nCode: %1\nName: %2\nPhone: %3\nEmail: %4")
+                          .arg(code).arg(name).arg(phone).arg(email));
+    }
+}
+
+void MainWindow::onSearchSparePart() {
+    bool ok;
+    int partNum = QInputDialog::getInt(this, "Search Part", "Enter Part Number:", 0, 0, 99999, 1, &ok);
+    if (!ok) return;
+
+    SparePart* part = partTree.search(partNum);
+    if (part) {
+        string msg = "Searched Spare Part #" + to_string(partNum);
+        historyStack.push(msg);
+        processQueue.enqueue("Processing: " + msg);
+
+        QString display = QString("✓ Part Found!\n\nPart Number: %1\nName: %2\nCost: $%3\nQuantity: %4\n\n%5")
+                              .arg(part->getPartNumber())
+                              .arg(QString::fromStdString(part->getPartName()))
+                              .arg(part->getCost(), 0, 'f', 2)
+                              .arg(part->getExistingParts())
+                              .arg(QString::fromStdString(part->getSuppliersList()));
+        updateDisplay(display);
+    } else {
+        updateDisplay("✗ Part not found!");
+    }
+}
+
+void MainWindow::onSearchSupplier() {
+    bool ok;
+    int code = QInputDialog::getInt(this, "Search Supplier", "Enter Supplier Code:", 0, 0, 99999, 1, &ok);
+    if (!ok) return;
+
+    Supplier* sup = supplierTree.search(code);
+    if (sup) {
+        string msg = "Searched Supplier #" + to_string(code);
+        historyStack.push(msg);
+        processQueue.enqueue("Processing: " + msg);
+
+        QString display = QString("✓ Supplier Found!\n\nCode: %1\nName: %2\nPhone: %3\nEmail: %4\nAddress: %5\n\n%6")
+                              .arg(sup->getSupplierCode())
+                              .arg(QString::fromStdString(sup->getSupplierName()))
+                              .arg(QString::fromStdString(sup->getTelephone()))
+                              .arg(QString::fromStdString(sup->getEmail()))
+                              .arg(QString::fromStdString(sup->getAddress()))
+                              .arg(QString::fromStdString(sup->getPartsList()));
+        updateDisplay(display);
+    } else {
+        updateDisplay("✗ Supplier not found!");
+    }
+}
+
+void MainWindow::onModifyRecord() {
+    QStringList items;
+    items << "Spare Part" << "Supplier";
+    bool ok;
+    QString item = QInputDialog::getItem(this, "Modify", "Select type to modify:", items, 0, false, &ok);
+    if (!ok) return;
+
+    if (item == "Spare Part") {
+        int partNum = QInputDialog::getInt(this, "Modify Part", "Enter Part Number:", 0, 0, 99999, 1, &ok);
+        if (!ok) return;
+
+        SparePart* part = partTree.search(partNum);
+        if (part) {
+            QString name = QInputDialog::getText(this, "Modify Part", "New Name:", QLineEdit::Normal,
+                                                 QString::fromStdString(part->getPartName()), &ok);
+            if (ok && !name.isEmpty()) part->setPartName(name.toStdString());
+
+            double cost = QInputDialog::getDouble(this, "Modify Part", "New Cost:", part->getCost(), 0.0, 999999.0, 2, &ok);
+            if (ok) part->setCost(cost);
+
+            int qty = QInputDialog::getInt(this, "Modify Part", "New Quantity:", part->getExistingParts(), 0, 99999, 1, &ok);
+            if (ok) part->setExistingParts(qty);
+
+            string msg = "Modified Spare Part #" + to_string(partNum);
+            historyStack.push(msg);
+            processQueue.enqueue("Processing: " + msg);
+            updateDisplay("✓ Part updated successfully!");
+        } else {
+            updateDisplay("✗ Part not found!");
+        }
+    } else {
+        int code = QInputDialog::getInt(this, "Modify Supplier", "Enter Supplier Code:", 0, 0, 99999, 1, &ok);
+        if (!ok) return;
+
+        Supplier* sup = supplierTree.search(code);
+        if (sup) {
+            QString name = QInputDialog::getText(this, "Modify Supplier", "New Name:", QLineEdit::Normal,
+                                                 QString::fromStdString(sup->getSupplierName()), &ok);
+            if (ok && !name.isEmpty()) sup->setSupplierName(name.toStdString());
+
+            updateDisplay("✓ Supplier updated successfully!");
+        } else {
+            updateDisplay("✗ Supplier not found!");
+        }
+    }
+}
+
+void MainWindow::onDisplayAllParts() {
+    string display = partTree.displayAll();
+    historyStack.push("Displayed all spare parts");
+    processQueue.enqueue("Processing: Display all parts");
+    updateDisplay(QString::fromStdString(display));
+}
+
+void MainWindow::onDisplayAllSuppliers() {
+    string display = supplierTree.displayAll();
+    historyStack.push("Displayed all suppliers");
+    processQueue.enqueue("Processing: Display all suppliers");
+    updateDisplay(QString::fromStdString(display));
+}
+
+void MainWindow::onShowHistory() {
+    updateDisplay(QString::fromStdString(historyStack.getDisplay()));
+}
+
+void MainWindow::onShowQueue() {
+    updateDisplay(QString::fromStdString(processQueue.getDisplay()));
+}
+
+void MainWindow::onLinkSupplierToPart() {
+    bool ok;
+    int partNum = QInputDialog::getInt(this, "Link", "Enter Part Number:", 0, 0, 99999, 1, &ok);
+    if (!ok) return;
+
+    int supCode = QInputDialog::getInt(this, "Link", "Enter Supplier Code:", 0, 0, 99999, 1, &ok);
+    if (!ok) return;
+
+    SparePart* part = partTree.search(partNum);
+    Supplier* sup = supplierTree.search(supCode);
+
+    if (part && sup) {
+        linkPartAndSupplier(part, sup);
+        string msg = "Linked Part #" + to_string(partNum) + " with Supplier #" + to_string(supCode);
+        historyStack.push(msg);
+        processQueue.enqueue("Processing: " + msg);
+        updateDisplay("✓ Link established successfully!");
+    } else {
+        updateDisplay("✗ Invalid part or supplier!");
+    }
+}
